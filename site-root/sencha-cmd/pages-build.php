@@ -21,6 +21,7 @@
 
 $GLOBALS['Session']->requireAccountLevel('Developer');
 set_time_limit(0);
+Site::$debug = !empty($_REQUEST['debug']);
 
 if(empty($_GET['dumpWorkspace'])) {
     Benchmark::startLive();

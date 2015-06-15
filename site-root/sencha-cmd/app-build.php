@@ -2,6 +2,8 @@
 
 $GLOBALS['Session']->requireAccountLevel('Developer');
 set_time_limit(0);
+Site::$debug = !empty($_REQUEST['debug']);
+
 $defaultExclude = array(
     "#/\\.sass-cache(/|$)#"
     ,"#/\\.sencha-backup(/|$)#"
