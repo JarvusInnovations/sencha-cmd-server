@@ -72,6 +72,7 @@ $archivePath = "sencha-build/$appName/archive";
 
 // get temporary directory and set paths
 $tmpPath = Emergence_FS::getTmpDir();
+$frameworkTmpPath = "$tmpPath/$framework";
 $workspaceConfigTmpPath = "$tmpPath/.sencha";
 $packagesTmpPath = "$tmpPath/packages";
 $appTmpPath = "$tmpPath/$appName";
@@ -81,20 +82,15 @@ $buildTmpPath = "$tmpPath/build/$appName/$buildType";
 Benchmark::mark("created tmp: $tmpPath");
 
 
-// change into tmp build directory
-chdir($tmpPath);
-Benchmark::mark("chdir to: $tmpPath");
-
-
 // write framework to disk
-$frameworkWriteResult = $framework->writeToDisk("./$framework");
-Benchmark::mark("wrote framework to ./$framework: ".http_build_query($frameworkWriteResult));
+$frameworkWriteResult = $framework->writeToDisk($frameworkTmpPath);
+Benchmark::mark("wrote framework to $frameworkTmpPath: ".http_build_query($frameworkWriteResult));
 
 
 // import framework to VFS
 // TODO: remove this when crawlRequiredPackages can accept an on-disk framework as a package source
 if ($frameworkWriteResult['source'] == 'archive') {
-	$importResults = Emergence_FS::importTree("./$framework", $framework->getWorkspacePath());
+	$importResults = Emergence_FS::importTree($frameworkTmpPath, $framework->getWorkspacePath());
 	Benchmark::mark("imported framework $framework to ". $framework->getWorkspacePath() . ': ' . http_build_query($importResults));
 }
 
@@ -160,10 +156,10 @@ foreach (array_unique($classPaths) AS $classPath) {
 
 
 // load hotfix package
-$hotfixBranch = Chaki\Package::writeToDisk('packages/jarvus-hotfixes', 'jarvus-hotfixes', $framework);
+$hotfixBranch = Chaki\Package::writeToDisk("$packagesTmpPath/jarvus-hotfixes", 'jarvus-hotfixes', $framework);
 
 if ($hotfixBranch) {
-    Benchmark::mark("checked out branch $hotfixBranch to packages/jarvus-hotfixes");
+    Benchmark::mark("checked out branch $hotfixBranch to $packagesTmpPath/jarvus-hotfixes");
 
 	// inject into app.json requires
 	if (!in_array('jarvus-hotfixes', $requiredPackages)) {
@@ -199,7 +195,7 @@ $shellCommand = $cmd->buildShellCommand(
         // preset build directory parameters
         ,"-Dbuild.dir=$buildTmpPath"
         ,"-Dapp.output.base=$buildTmpPath" // CMD 5.0.1 needs this set directly too or it gets loaded from app.defaults.json
-        ,"-D" . $framework->getName() . ".dir=./$framework"
+        ,"-D" . $framework->getName() . ".dir=$frameworkTmpPath"
         
         // ant targets
         ,$buildType // buildType target (e.g. "production", "testing") sets up build parameters
