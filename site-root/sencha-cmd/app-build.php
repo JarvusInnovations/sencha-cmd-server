@@ -232,21 +232,28 @@ $GLOBALS['Session']->requireAccountLevel('Developer');
 
     // patch local app build proprties because cmd doesn't listen to -D and local.properties for framework dir
     Jarvus\Sencha\Util::patchAntProperties("$appTmpPath/.sencha/app/sencha.cfg", [
-        $framework->getName() . '.dir' => $frameworkPhysicalPath,
-        'build.dir' => $buildTmpPath,
-        'app.output.base' => $buildTmpPath // CMD 5.0.1 needs this set directly too or it gets loaded from app.defaults.json
+        $framework->getName() . '.dir' => $frameworkPhysicalPath
     ]);
 
 
     // prepare cmd
-    $shellCommand = $cmd->buildShellCommand("-i ant $buildType build");
+    $shellCommand = $cmd->buildShellCommand(
+        'ant',
+            // preset build directory parameters
+            "-Dbuild.dir=$buildTmpPath",
+            "-Dapp.output.base=$buildTmpPath", // CMD 5.0.1 needs this set directly too or it gets loaded from app.defaults.json
+
+        // ant targets
+        $buildType, // buildType target (e.g. "production", "testing") sets up build parameters
+        'build'
+    );
     Benchmark::mark("running CMD: $shellCommand");
 
 
     // optionally dump workspace and exit
     if (!empty($_GET['dumpWorkspace']) && $_GET['dumpWorkspace'] != 'afterBuild') {
         header('Content-Type: application/x-bzip-compressed-tar');
-        header('Content-Disposition: attachment; filename="'.$appName.'.'.date('Y-m-d').'.tbz"');
+        header('Content-Disposition: attachment; filename="'.$app.'.'.date('Y-m-d').'.tbz"');
         chdir($tmpPath);
         passthru("tar -cjf - ./");
         exec("rm -R $tmpPath");
@@ -260,7 +267,7 @@ $GLOBALS['Session']->requireAccountLevel('Developer');
         exec($shellCommand);
 
         header('Content-Type: application/x-bzip-compressed-tar');
-        header('Content-Disposition: attachment; filename="'.$appName.'.'.date('Y-m-d').'.tbz"');
+        header('Content-Disposition: attachment; filename="'.$app.'.'.date('Y-m-d').'.tbz"');
         chdir($tmpPath);
         passthru("tar -cjf - ./");
         exec("rm -R $tmpPath");
@@ -284,7 +291,7 @@ $GLOBALS['Session']->requireAccountLevel('Developer');
 if($cmdStatus == 0) {
     Benchmark::mark("importing $buildTmpPath");
 
-    $importResults = Emergence_FS::importTree($buildTmpPath, "sencha-build/$appName/$buildType", [
+    $importResults = Emergence_FS::importTree($buildTmpPath, "sencha-build/$app/$buildType", [
         'exclude' => $defaultExclude
     ]);
     Benchmark::mark("imported files: ".http_build_query($importResults));
