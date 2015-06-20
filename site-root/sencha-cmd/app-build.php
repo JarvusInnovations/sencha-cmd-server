@@ -232,14 +232,21 @@ $GLOBALS['Session']->requireAccountLevel('Developer');
 
     // patch local app build proprties because cmd doesn't listen to -D and local.properties for framework dir
     Jarvus\Sencha\Util::patchAntProperties("$appTmpPath/.sencha/app/sencha.cfg", [
-        $framework->getName() . '.dir' => $frameworkPhysicalPath,
-        'build.dir' => $buildTmpPath,
-        'app.output.base' => $buildTmpPath // CMD 5.0.1 needs this set directly too or it gets loaded from app.defaults.json
+        $framework->getName() . '.dir' => $frameworkPhysicalPath
     ]);
 
 
     // prepare cmd
-    $shellCommand = $cmd->buildShellCommand("-i ant $buildType build");
+    $shellCommand = $cmd->buildShellCommand(
+        'ant',
+            // preset build directory parameters
+            "-Dbuild.dir=$buildTmpPath",
+            "-Dapp.output.base=$buildTmpPath", // CMD 5.0.1 needs this set directly too or it gets loaded from app.defaults.json
+
+        // ant targets
+        $buildType, // buildType target (e.g. "production", "testing") sets up build parameters
+        'build'
+    );
     Benchmark::mark("running CMD: $shellCommand");
 
 
