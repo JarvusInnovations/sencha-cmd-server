@@ -27,7 +27,7 @@ $GLOBALS['Session']->requireAccountLevel('Developer');
  */
     set_time_limit(0);
     Site::$debug = !empty($_REQUEST['debug']);
-    
+
     if (empty($_GET['dumpWorkspace'])) {
         Benchmark::startLive();
     }
@@ -45,46 +45,46 @@ $GLOBALS['Session']->requireAccountLevel('Developer');
     // get build type
     if (empty($_REQUEST['buildType'])) {
         $buildType = 'production';
-    } else {    
+    } else {
         $buildType = $_REQUEST['buildType'];
     }
     Benchmark::mark("set buildType: $buildType");
-    
-    
+
+
     // get app
     if (empty($_REQUEST['name'])) {
         die('Parameter name required');
     }
-    
+
     $app = Jarvus\Sencha\App::get($_REQUEST['name']);
-    
+
     if (!$app) {
         throw new \Exception('Failed to load app');
     }
-    
+
     Benchmark::mark("loaded app: $app");
-    
-    
+
+
     // get framework
     $framework = $app->getFramework();
-    
+
     if (!$framework) {
         throw new \Exception('Failed to load framework');
     }
-    
+
     Benchmark::mark("loaded framework: $framework");
-    
-    
+
+
     // load CMD
     $cmd = $app->getCmd();
-    
+
     if (!$cmd) {
         throw new \Exception('Failed to load CMD');
     }
-    
+
     Benchmark::mark("loaded cmd: $cmd");
-    
-    
+
+
     // get app-level classpath
     $classPaths = $app->getClassPaths();
     Benchmark::mark('loaded classPaths:' . PHP_EOL . implode(PHP_EOL, $classPaths));
@@ -146,7 +146,7 @@ $GLOBALS['Session']->requireAccountLevel('Developer');
     $exportResult = Emergence_FS::exportTree($workspaceConfigPath, $workspaceConfigTmpPath);
     Benchmark::mark("exported $workspaceConfigPath to $workspaceConfigTmpPath: ".http_build_query($exportResult));
 
-    
+
     // framework -- doesn't need to be written as long as patching ${framework}.dir into sencha.cfg keeps working
 #    $framework->writeToDisk("$tmpPath/$framework");
 #    Benchmark::mark("wrote $framework to $tmpPath/$framework");
@@ -175,18 +175,18 @@ $GLOBALS['Session']->requireAccountLevel('Developer');
         $classPathSource = "ext-library/$libraryClassPath";
         $classPathDest = "$libraryTmpPath/$libraryClassPath";
 
-    	$cachedFiles = Emergence_FS::cacheTree($classPathSource);
-		Benchmark::mark("precached $cachedFiles files in $classPathSource");
+        $cachedFiles = Emergence_FS::cacheTree($classPathSource);
+        Benchmark::mark("precached $cachedFiles files in $classPathSource");
 
         $sourceNode = Site::resolvePath($classPathSource);
 
         if ($sourceNode instanceof SiteFile) {
             mkdir(dirname($classPathDest), 0777, true);
             copy($sourceNode->RealPath, $classPathDest);
-    		Benchmark::mark("copied file $classPathSource to $classPathDest");
+            Benchmark::mark("copied file $classPathSource to $classPathDest");
         } else {
-        	$exportResult = Emergence_FS::exportTree($classPathSource, $classPathDest);
-    		Benchmark::mark("exported $classPathSource to $classPathDest: ".http_build_query($exportResult));
+            $exportResult = Emergence_FS::exportTree($classPathSource, $classPathDest);
+            Benchmark::mark("exported $classPathSource to $classPathDest: ".http_build_query($exportResult));
         }
     }
 
@@ -206,12 +206,12 @@ $GLOBALS['Session']->requireAccountLevel('Developer');
 
     // write archive
     if(!empty($_GET['archive'])) {
-    	try {
-    		$exportResult = Emergence_FS::exportTree($archivePath, $archiveTmpPath);
-    		Benchmark::mark("exported $archivePath to $archiveTmpPath: ".http_build_query($exportResult));
-    	} catch (Exception $e) {
-    		Benchmark::mark("failed to export $archivePath, continueing");
-    	}
+        try {
+            $exportResult = Emergence_FS::exportTree($archivePath, $archiveTmpPath);
+            Benchmark::mark("exported $archivePath to $archiveTmpPath: ".http_build_query($exportResult));
+        } catch (Exception $e) {
+            Benchmark::mark("failed to export $archivePath, continueing");
+        }
     }
 
 
@@ -232,48 +232,41 @@ $GLOBALS['Session']->requireAccountLevel('Developer');
 
     // patch local app build proprties because cmd doesn't listen to -D and local.properties for framework dir
     Jarvus\Sencha\Util::patchAntProperties("$appTmpPath/.sencha/app/sencha.cfg", [
-        $framework->getName() . '.dir' => $frameworkPhysicalPath
+        $framework->getName() . '.dir' => $frameworkPhysicalPath,
+        'build.dir' => $buildTmpPath,
+        'app.output.base' => $buildTmpPath // CMD 5.0.1 needs this set directly too or it gets loaded from app.defaults.json
     ]);
 
 
     // prepare cmd
-    $shellCommand = $cmd->buildShellCommand(
-        'ant',
-            // preset build directory parameters
-            "-Dbuild.dir=$buildTmpPath",
-            "-Dapp.output.base=$buildTmpPath", // CMD 5.0.1 needs this set directly too or it gets loaded from app.defaults.json
-
-        // ant targets
-        $buildType, // buildType target (e.g. "production", "testing") sets up build parameters
-        'build'
-    );
+    $shellCommand = $cmd->buildShellCommand("-i ant $buildType build");
     Benchmark::mark("running CMD: $shellCommand");
 
 
     // optionally dump workspace and exit
     if (!empty($_GET['dumpWorkspace']) && $_GET['dumpWorkspace'] != 'afterBuild') {
-    	header('Content-Type: application/x-bzip-compressed-tar');
-    	header('Content-Disposition: attachment; filename="'.$appName.'.'.date('Y-m-d').'.tbz"');
-    	chdir($tmpPath);
-    	passthru("tar -cjf - ./");
-    	exec("rm -R $tmpPath");
-    	exit();
+        header('Content-Type: application/x-bzip-compressed-tar');
+        header('Content-Disposition: attachment; filename="'.$appName.'.'.date('Y-m-d').'.tbz"');
+        chdir($tmpPath);
+        passthru("tar -cjf - ./");
+        exec("rm -R $tmpPath");
+        exit();
     }
 
 
     // execute CMD
     //  - optionally dump workspace and exit
     if (!empty($_GET['dumpWorkspace']) && $_GET['dumpWorkspace'] == 'afterBuild') {
-    	exec($shellCommand);
-    	
-    	header('Content-Type: application/x-bzip-compressed-tar');
-    	header('Content-Disposition: attachment; filename="'.$appName.'.'.date('Y-m-d').'.tbz"');
-    	chdir($tmpPath);
-    	passthru("tar -cjf - ./");
-    	exec("rm -R $tmpPath");
-    	exit();
+        exec($shellCommand);
+
+        header('Content-Type: application/x-bzip-compressed-tar');
+        header('Content-Disposition: attachment; filename="'.$appName.'.'.date('Y-m-d').'.tbz"');
+        chdir($tmpPath);
+        passthru("tar -cjf - ./");
+        exec("rm -R $tmpPath");
+        exit();
     } else {
-    	passthru("$shellCommand 2>&1", $cmdStatus);
+        passthru("$shellCommand 2>&1", $cmdStatus);
     }
 
     Benchmark::mark("CMD finished: exitCode=$cmdStatus");
@@ -288,25 +281,25 @@ $GLOBALS['Session']->requireAccountLevel('Developer');
  * Import build
  */
 // import build
-if($cmdStatus == 0) {	
-	Benchmark::mark("importing $buildTmpPath");
-	
-	$importResults = Emergence_FS::importTree($buildTmpPath, "sencha-build/$appName/$buildType", [
-		'exclude' => $defaultExclude
-	]);
-	Benchmark::mark("imported files: ".http_build_query($importResults));
-	
-	if ($framework == 'ext') {
-		Emergence_FS::importFile("$appTmpPath/bootstrap.js", "$appPath/bootstrap.js");
-		Benchmark::mark("imported bootstrap.js");
-	}
-	
-	if(!empty($_GET['archive'])) {
-		Benchmark::mark("importing $archiveTmpPath to $archivePath");
-		
-		$importResults = Emergence_FS::importTree($archiveTmpPath, $archivePath);
-		Benchmark::mark("imported files: ".http_build_query($importResults));
-	}
+if($cmdStatus == 0) {
+    Benchmark::mark("importing $buildTmpPath");
+
+    $importResults = Emergence_FS::importTree($buildTmpPath, "sencha-build/$appName/$buildType", [
+        'exclude' => $defaultExclude
+    ]);
+    Benchmark::mark("imported files: ".http_build_query($importResults));
+
+    if ($framework == 'ext') {
+        Emergence_FS::importFile("$appTmpPath/bootstrap.js", "$appPath/bootstrap.js");
+        Benchmark::mark("imported bootstrap.js");
+    }
+
+    if(!empty($_GET['archive'])) {
+        Benchmark::mark("importing $archiveTmpPath to $archivePath");
+
+        $importResults = Emergence_FS::importTree($archiveTmpPath, $archivePath);
+        Benchmark::mark("imported files: ".http_build_query($importResults));
+    }
 }
 
 
@@ -318,6 +311,6 @@ if($cmdStatus == 0) {
  * Clean up
  */
 if (empty($_GET['leaveWorkspace'])) {
-	exec("rm -R $tmpPath");
-	Benchmark::mark("erased $tmpPath");
+    exec("rm -R $tmpPath");
+    Benchmark::mark("erased $tmpPath");
 }
