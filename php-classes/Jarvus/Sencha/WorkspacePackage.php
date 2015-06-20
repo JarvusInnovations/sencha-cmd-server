@@ -93,6 +93,11 @@ class WorkspacePackage extends Package
         return true;
     }
 
+    public function getVirtualPath($autoLoad = true)
+    {
+        return $this->path;
+    }
+
 
     // static utility methods
     public static function getWorkspacePackages()

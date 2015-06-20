@@ -87,6 +87,13 @@ class FrameworkPackage extends Package
         throw new \Exception("Cannot write to disk from source type $this->source");
     }
 
+    public function getVirtualPath($autoLoad = true)
+    {
+        $frameworkPath = $this->framework->getVirtualPath($autoLoad);
+
+        return $frameworkPath ? "$frameworkPath/packages/$this" : null;
+    }
+
 
     // static utility methods
     public static function getFrameworkPackages(Framework $framework)

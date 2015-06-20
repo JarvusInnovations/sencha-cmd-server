@@ -11,4 +11,5 @@ interface IPackage
     public function getFileContents($path);
     public function getFilePointer($path);
     public function writeToDisk($path);
+    public function getVirtualPath($autoLoad = true);
 }
