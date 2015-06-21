@@ -67,9 +67,9 @@ chdir($tmpPath);
 Benchmark::mark("chdir to: $tmpPath");
 
 
-// write framework to disk
-$exportResult = $framework->writeToDisk("./$framework");
-Benchmark::mark("wrote framework to ./$framework: ".http_build_query($exportResult));
+// get path to framework on disk
+$frameworkPhysicalPath = $framework->getPhysicalPath();
+Benchmark::mark("got physical path to framework: $frameworkPhysicalPath");
 
 
 // precache and write pages to disk
@@ -89,13 +89,14 @@ $classPaths = !empty($buildConfig['workspace.classpath']) ? explode(',', $buildC
 
 
 // load hotfix package
-$hotfixBranch = Chaki\Package::writeToDisk('packages/jarvus-hotfixes', 'jarvus-hotfixes', $framework);
+$hotfixPackage = Jarvus\Sencha\Package::get('jarvus-hotfixes', $framework);
 
-if ($hotfixBranch) {
+if ($hotfixPackage) {
+    $hotfixPackage->writeToDisk('packages/jarvus-hotfixes');
     $packages[] = 'jarvus-hotfixes';
     $commonOverrides[] = "include -recursive -file ./packages/jarvus-hotfixes/overrides";
     $classPaths[] = './packages/jarvus-hotfixes/overrides';
-    Benchmark::mark("checked out branch $hotfixBranch to packages/jarvus-hotfixes");
+    Benchmark::mark("checked out package $hotfixPackage to packages/jarvus-hotfixes");
 }
 
 
@@ -199,7 +200,7 @@ foreach($classPaths AS &$classPath) {
 // prepare cmd
 $classPaths[] = 'src';
 $shellCommand = $cmd->buildShellCommand(
-    "-sdk ./$framework"
+    "-sdk $frameworkPhysicalPath"
     ,'compile'
         ,"-classpath=".implode(',', array_unique($classPaths))
         
