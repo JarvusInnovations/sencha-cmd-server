@@ -7,7 +7,7 @@ use Emergence_FS;
 
 class Framework
 {
-	public static $versions = [
+    public static $versions = [
         'ext' => [
 			// default config for all framework versions
 			'*'			=> [
@@ -237,6 +237,12 @@ class Framework
             return false;
         }
 
+        $archiveDir = dirname($archivePath);
+
+        if (!is_dir($archiveDir)) {
+            mkdir($archiveDir, 0777, true);
+        }
+
 		exec(
             sprintf('wget %s -O %s', escapeshellarg($downloadUrl), escapeshellarg($archivePath)),
             $downloadOutput,
@@ -244,7 +250,7 @@ class Framework
         );
 
 		if ($downloadStatus != 0 || !file_exists($archivePath)) {
-			unlink($archivePath);
+			@unlink($archivePath);
 			throw new \Exception("Failed to download framework from $downloadUrl, wget status=$downloadStatus");
 		}
 
