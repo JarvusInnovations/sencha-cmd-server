@@ -121,11 +121,13 @@ class WorkspacePackage extends Package
                 $packageName = $packageConfig['name'];
 
                 if (!preg_match('/^([\\w-]+)(@((\\w+)(-(\\d+(\\.\\d+){0,3}))?))?$/m', $packageDir, $matches)) {
-                    throw new \Exception("Unparsable package directory name for $packagePath");
+                    \Emergence\Logger::general_warning("Unparsable package directory name for $packagePath");
+                    continue;
                 }
 
                 if ($packageName != $matches[1]) {
-                    throw new \Exception("Name from package.json does not match package directory name for $packagePath");
+                    \Emergence\Logger::general_warning("Name from package.json does not match package directory name for $packagePath");
+                    continue;
                 }
 
                 $targetFramework = $matches[3] ?: '*';
