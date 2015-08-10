@@ -11,6 +11,7 @@ class Util
     public static function cleanJson($json)
     {
         $json = preg_replace('#/\*.*?\*/#s', '', $json);
+        $json = preg_replace('#\s*//.*#', '', $json);
 		$json = preg_replace('#([^\\\\])\\\\\\.#', '$1\\\\\\.', $json); // replace sencha-included "\." with "\\."
 
         return $json;
