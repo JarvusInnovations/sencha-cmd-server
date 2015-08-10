@@ -144,6 +144,10 @@ abstract class Package implements IPackage
                 $package = $outputPackages[$packageName] = static::get($packageName, $framework);
             }
 
+            if (!$package) {
+                throw new \Exception("Could not find source for package $packageName");
+            }
+
             static::aggregatePackageDependencies($package->getRequiredPackageNames(), $framework, $outputPackages);
         }
 
