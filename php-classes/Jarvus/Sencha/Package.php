@@ -126,7 +126,7 @@ abstract class Package implements IPackage
             $packagePath = $packagePath->RealPath;
         }
 
-        $packageConfig = json_decode(file_get_contents($packagePath), true);
+        $packageConfig = json_decode(Util::cleanJson(file_get_contents($packagePath)), true);
 
         if (!$packageConfig || empty($packageConfig['name'])) {
             throw new \Exception("Could not parse package.json for $packagePath");
