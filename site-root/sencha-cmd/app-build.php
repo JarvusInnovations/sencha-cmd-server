@@ -116,6 +116,7 @@ $GLOBALS['Session']->requireAccountLevel('Developer');
 
     // get temporary directory and set paths
     $tmpPath = Emergence_FS::getTmpDir();
+    $frameworkTmpPath = "$tmpPath/$framework";
     $workspaceConfigTmpPath = "$tmpPath/.sencha";
     $packagesTmpPath = "$tmpPath/packages";
     $appTmpPath = "$tmpPath/$app";
@@ -140,6 +141,10 @@ $GLOBALS['Session']->requireAccountLevel('Developer');
 /**
  * Copy files into temporary build workspace
  */
+    // symlink framework
+    symlink($frameworkPhysicalPath, $frameworkTmpPath);
+    Benchmark::mark("symlinked framework: $frameworkTmpPath -> $frameworkPhysicalPath");
+
     // precache and write workspace config
     $cachedFiles = Emergence_FS::cacheTree($workspaceConfigPath);
     Benchmark::mark("precached $cachedFiles files in $workspaceConfigPath");
@@ -228,12 +233,6 @@ $GLOBALS['Session']->requireAccountLevel('Developer');
     // change into app's directory
     chdir($appTmpPath);
     Benchmark::mark("chdir to: $appTmpPath");
-
-
-    // patch local app build proprties because cmd doesn't listen to -D and local.properties for framework dir
-    Jarvus\Sencha\Util::patchAntProperties("$appTmpPath/.sencha/app/sencha.cfg", [
-        $framework->getName() . '.dir' => $frameworkPhysicalPath
-    ]);
 
 
     // prepare cmd
