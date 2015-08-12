@@ -142,7 +142,7 @@ class FrameworkPackage extends Package
     
                 $packages[$packageDir] = [
                     'source' => 'vfs',
-                    'path' => $packagesSubpath,
+                    'path' => $packagePath,
                     'name' => $packageDir,
                     'config' => $packageConfig
                 ];
@@ -175,7 +175,7 @@ class FrameworkPackage extends Package
     
                 $packages[$packageDir] = [
                     'source' => 'disk',
-                    'path' => $packagesSubpath,
+                    'path' => $packagePath,
                     'name' => $packageDir,
                     'config' => $packageConfig
                 ];
