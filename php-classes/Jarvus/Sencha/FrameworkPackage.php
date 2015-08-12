@@ -103,13 +103,13 @@ class FrameworkPackage extends Package
         if (!$packages = Cache::fetch($cacheKey)) {
             // sniff for quickest source for package data
             if ($frameworkVirtualPath = $framework->getVirtualPath(false)) {
-                $packages = static::loadPackagesFromVFS("$frameworkVirtualPath/packages");
+                $packages = static::loadPackagesFromVFS($frameworkVirtualPath);
             } elseif ($frameworkPhysicalPath = $framework->getPhysicalPath(false)) {
-                $packages = static::loadPackagesFromDisk("$frameworkPhysicalPath/packages");
+                $packages = static::loadPackagesFromDisk($frameworkPhysicalPath);
             } elseif ($frameworkPhysicalPath = $framework->getPhysicalPath(true)) {
-                $packages = static::loadPackagesFromDisk("$frameworkPhysicalPath/packages");
+                $packages = static::loadPackagesFromDisk($frameworkPhysicalPath);
             } elseif ($frameworkVirtualPath = $framework->getVirtualPath(true)) {
-                $packages = static::loadPackagesFromVFS("$frameworkVirtualPath/packages");
+                $packages = static::loadPackagesFromVFS($frameworkVirtualPath);
             }
 
             Cache::store($cacheKey, $packages);
@@ -121,28 +121,32 @@ class FrameworkPackage extends Package
     protected static function loadPackagesFromVFS($packagesPath)
     {
         $packages = [];
-        $packageNodes = Emergence_FS::getAggregateChildren($packagesPath);
-
-        foreach ($packageNodes AS $packageDir => $packageNode) {
-            $packagePath = "$packagesPath/$packageDir";
-            $packageJsonNode = Site::resolvePath("$packagePath/package.json");
-
-            if (!$packageJsonNode) {
-                throw new \Exception("Could not find package.json for $packagePath");
+        
+        foreach (['packages', 'modern', 'classic'] AS $packagesCollection) {
+            $packagesSubpath = "$packagesPath/$packagesCollection";
+            $packageNodes = Emergence_FS::getAggregateChildren($packagesSubpath);
+    
+            foreach ($packageNodes AS $packageDir => $packageNode) {
+                $packagePath = "$packagesSubpath/$packageDir";
+                $packageJsonNode = Site::resolvePath("$packagePath/package.json");
+    
+                if (!$packageJsonNode) {
+                    continue;
+                }
+    
+                $packageConfig = static::loadPackageConfig($packageJsonNode);
+     
+                if ($packageDir != $packageConfig['name']) {
+                    throw new \Exception("Name from package.json does not match package directory name for $packagePath");
+                }
+    
+                $packages[$packageDir] = [
+                    'source' => 'vfs',
+                    'path' => $packagesSubpath,
+                    'name' => $packageDir,
+                    'config' => $packageConfig
+                ];
             }
-
-            $packageConfig = static::loadPackageConfig($packageJsonNode);
- 
-            if ($packageDir != $packageConfig['name']) {
-                throw new \Exception("Name from package.json does not match package directory name for $packagePath");
-            }
-
-            $packages[$packageDir] = [
-                'source' => 'vfs',
-                'path' => $packagePath,
-                'name' => $packageDir,
-                'config' => $packageConfig
-            ];
         }
 
         return $packages;
@@ -152,26 +156,30 @@ class FrameworkPackage extends Package
     {
         $packages = [];
 
-        foreach(glob("$packagesPath/*") AS $packagePath) {
-            $packageDir = basename($packagePath);
-            $packageJsonPath = "$packagePath/package.json";
+        foreach (['packages', 'modern', 'classic'] AS $packagesCollection) {
+            $packagesSubpath = "$packagesPath/$packagesCollection";
 
-            if (!file_exists($packageJsonPath)) {
-                throw new \Exception("Could not find package.json for $packagePath");
+            foreach(glob("$packagesSubpath/*") AS $packagePath) {
+                $packageDir = basename($packagePath);
+                $packageJsonPath = "$packagePath/package.json";
+    
+                if (!file_exists($packageJsonPath)) {
+                    continue;
+                }
+    
+                $packageConfig = static::loadPackageConfig($packageJsonPath);
+     
+                if ($packageDir != $packageConfig['name']) {
+                    throw new \Exception("Name from package.json does not match package directory name for $packagePath");
+                }
+    
+                $packages[$packageDir] = [
+                    'source' => 'disk',
+                    'path' => $packagesSubpath,
+                    'name' => $packageDir,
+                    'config' => $packageConfig
+                ];
             }
-
-            $packageConfig = static::loadPackageConfig($packageJsonPath);
- 
-            if ($packageDir != $packageConfig['name']) {
-                throw new \Exception("Name from package.json does not match package directory name for $packagePath");
-            }
-
-            $packages[$packageDir] = [
-                'source' => 'disk',
-                'path' => $packagePath,
-                'name' => $packageDir,
-                'config' => $packageConfig
-            ];
         }
 
         return $packages;
