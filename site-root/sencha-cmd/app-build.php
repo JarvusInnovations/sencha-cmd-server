@@ -141,9 +141,9 @@ $GLOBALS['Session']->requireAccountLevel('Developer');
 /**
  * Copy files into temporary build workspace
  */
-    // symlink framework
-    symlink($frameworkPhysicalPath, $frameworkTmpPath);
-    Benchmark::mark("symlinked framework: $frameworkTmpPath -> $frameworkPhysicalPath");
+    // copy framework w/ hardlinks
+    exec("cp -al $frameworkPhysicalPath $frameworkTmpPath");
+    Benchmark::mark("copied framework: cp -al $frameworkPhysicalPath $frameworkTmpPath");
 
     // precache and write workspace config
     $cachedFiles = Emergence_FS::cacheTree($workspaceConfigPath);
