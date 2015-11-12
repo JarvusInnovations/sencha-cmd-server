@@ -141,9 +141,15 @@ $GLOBALS['Session']->requireAccountLevel('Developer');
 /**
  * Copy files into temporary build workspace
  */
-    // copy framework w/ hardlinks
-    exec("cp -al $frameworkPhysicalPath $frameworkTmpPath");
-    Benchmark::mark("copied framework: cp -al $frameworkPhysicalPath $frameworkTmpPath");
+    if (stat($frameworkPhysicalPath)['dev'] == stat($tmpPath)['dev']) {
+        // copy framework w/ hardlinks if paths are on the same device
+        exec("cp -al $frameworkPhysicalPath $frameworkTmpPath");
+        Benchmark::mark("copied framework: cp -al $frameworkPhysicalPath $frameworkTmpPath");
+    } else {
+        // make full copy because hardlines don't work across devices
+        exec("cp -a $frameworkPhysicalPath $frameworkTmpPath");
+        Benchmark::mark("copied framework: cp -a $frameworkPhysicalPath $frameworkTmpPath");
+    }
 
     // precache and write workspace config
     $cachedFiles = Emergence_FS::cacheTree($workspaceConfigPath);
