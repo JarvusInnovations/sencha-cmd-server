@@ -20,10 +20,10 @@ class App
     protected $classPaths;
 
     // factories
-	public static function get($name)
-	{
+    public static function get($name)
+    {
         $appPath = "sencha-workspace/$name";
-		$appJsonNode = Site::resolvePath("$appPath/app.json");
+        $appJsonNode = Site::resolvePath("$appPath/app.json");
 
         if (!$appJsonNode) {
             return null;
@@ -42,30 +42,30 @@ class App
         }
 
         return new static($name, $appConfig);
-	}
+    }
 
 
     // magic methods and property getters
     public function __construct($name, $config)
-	{
-		$this->name = $name;
+    {
+        $this->name = $name;
         $this->config = $config;
-	}
+    }
 
     public function __toString()
-	{
-		return $this->name;
-	}
+    {
+        return $this->name;
+    }
 
-	public function getName()
-	{
-		return $this->name;
-	}
+    public function getName()
+    {
+        return $this->name;
+    }
 
-	public function getConfig($key = null)
-	{
-		return $key ? $this->config[$key] : $this->config;
-	}
+    public function getConfig($key = null)
+    {
+        return $key ? $this->config[$key] : $this->config;
+    }
 
 
     // member methods
@@ -104,7 +104,7 @@ class App
             // TODO: cache this with an event handler to clear?
         }
 
-    	return $key ? $this->antConfig[$key] : $this->antConfig;
+        return $key ? $this->antConfig[$key] : $this->antConfig;
     }
 
     /**
@@ -123,7 +123,7 @@ class App
             $this->appAntConfig = Util::loadAntProperties($antConfigNode->RealPath);
         }
 
-    	return $key ? $this->appAntConfig[$key] : $this->appAntConfig;
+        return $key ? $this->appAntConfig[$key] : $this->appAntConfig;
     }
 
     /**

@@ -12,8 +12,8 @@ class WorkspacePackage extends Package
 
 
     // factories
-	public static function load($name, Framework $framework)
-	{
+    public static function load($name, Framework $framework)
+    {
         // try to load package from VFS
         $workspacePackages = static::getWorkspacePackages();
 
@@ -29,7 +29,7 @@ class WorkspacePackage extends Package
 
         while (
             count($versionStack) &&
-            ($matchedVersion = $framework->getName() . '-' . implode('.', $versionStack)) &&
+            ($matchedVersion = $framework->getName().'-'.implode('.', $versionStack)) &&
             empty($workspacePackageVersions[$matchedVersion])
         ) {
             array_pop($versionStack);
@@ -51,15 +51,15 @@ class WorkspacePackage extends Package
         $packageData = $workspacePackageVersions[$matchedVersion];
 
         return new static($packageData['name'], $packageData['config'], $packageData['path']);
-	}
+    }
 
 
     // magic methods and property getters
     public function __construct($name, $config, $path)
-	{
-		parent::__construct($name, $config);
+    {
+        parent::__construct($name, $config);
         $this->path = $path;
-	}
+    }
 
 
     // member methods
@@ -117,7 +117,7 @@ class WorkspacePackage extends Package
                     throw new \Exception("Could not find package.json for $packagePath");
                 }
 
-                $packageConfig = static::loadPackageConfig($packageJsonNode);  
+                $packageConfig = static::loadPackageConfig($packageJsonNode);
                 $packageName = $packageConfig['name'];
 
                 if (!preg_match('/^([\\w-]+)(@((\\w+)(-(\\d+(\\.\\d+){0,3}))?))?$/m', $packageDir, $matches)) {

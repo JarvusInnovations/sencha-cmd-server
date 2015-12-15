@@ -87,12 +87,12 @@ $GLOBALS['Session']->requireAccountLevel('Developer');
 
     // get app-level classpath
     $classPaths = $app->getClassPaths();
-    Benchmark::mark('loaded classPaths:' . PHP_EOL . implode(PHP_EOL, $classPaths));
+    Benchmark::mark('loaded classPaths:'.PHP_EOL.implode(PHP_EOL, $classPaths));
 
 
     // get packages
     $packages = $app->getAllRequiredPackages();
-    Benchmark::mark('loaded required packages:' . PHP_EOL . implode(PHP_EOL, $packages));
+    Benchmark::mark('loaded required packages:'.PHP_EOL.implode(PHP_EOL, $packages));
 
 
 
@@ -216,7 +216,7 @@ $GLOBALS['Session']->requireAccountLevel('Developer');
 
 
     // write archive
-    if(!empty($_GET['archive'])) {
+    if (!empty($_GET['archive'])) {
         try {
             $exportResult = Emergence_FS::exportTree($archivePath, $archiveTmpPath);
             Benchmark::mark("exported $archivePath to $archiveTmpPath: ".http_build_query($exportResult));
@@ -296,7 +296,7 @@ $GLOBALS['Session']->requireAccountLevel('Developer');
  * Import build
  */
 // import build
-if($cmdStatus == 0) {
+if ($cmdStatus == 0) {
     Benchmark::mark("importing $buildTmpPath");
 
     $importResults = Emergence_FS::importTree($buildTmpPath, "sencha-build/$app/$buildType", [
@@ -309,7 +309,7 @@ if($cmdStatus == 0) {
         Benchmark::mark("imported bootstrap.js");
     }
 
-    if(!empty($_GET['archive'])) {
+    if (!empty($_GET['archive'])) {
         Benchmark::mark("importing $archiveTmpPath to $archivePath");
 
         $importResults = Emergence_FS::importTree($archiveTmpPath, $archivePath);

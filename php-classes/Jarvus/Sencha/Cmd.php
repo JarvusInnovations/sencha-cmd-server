@@ -4,110 +4,110 @@ namespace Jarvus\Sencha;
 
 class Cmd
 {
-	public static $installRoot = '/usr/local/bin/Sencha/Cmd';
+    public static $installRoot = '/usr/local/bin/Sencha/Cmd';
 
-	protected $version;
-	protected $path;
-
-
-	// factories
-	public static function get($version, $path = null)
-	{
-		if (!$path) {
-			$availableVersions = static::getAvailableVersions();
-
-			if (empty($availableVersions[$version])) {
-				throw new \Exception('Could not detect path for CMD version');
-			}
-
-			$path = $availableVersions[$version];
-		}
-
-		return new static($version, $path);
-	}
-
-	public static function getLatest()
-	{
-		$availableVersions = static::getAvailableVersions();
-
-		end($availableVersions);
-		$latestVersion = key($availableVersions);
-
-		return static::get($latestVersion, $availableVersions[$latestVersion]);
-	}
+    protected $version;
+    protected $path;
 
 
-	// magic methods and property getters
-	public function __construct($version, $path)
-	{
-		$this->version = $version;
-		$this->path = $path;
-	}
+    // factories
+    public static function get($version, $path = null)
+    {
+        if (!$path) {
+            $availableVersions = static::getAvailableVersions();
 
-	public function __toString()
-	{
-		return $this->path;
-	}
+            if (empty($availableVersions[$version])) {
+                throw new \Exception('Could not detect path for CMD version');
+            }
 
-	public function getVersion()
-	{
-		return $this->version;
-	}
+            $path = $availableVersions[$version];
+        }
 
-	public function getPath()
-	{
-		return $this->path;
-	}
+        return new static($version, $path);
+    }
 
-	// public instance methods
-	public function getExecutablePath()
-	{
-		return $this->getPath() . '/sencha';
-	}
+    public static function getLatest()
+    {
+        $availableVersions = static::getAvailableVersions();
 
-	public function getDefaultEnv()
-	{
-		return [
-			'SENCHA_CMD_3_0_0' => $this->getPath()
-		];
-	}
+        end($availableVersions);
+        $latestVersion = key($availableVersions);
 
-	public function buildShellCommand()
-	{
-		$shellCommand = $this->getExecutablePath();
-
-		$env = $this->getDefaultEnv();
-
-		if (count($env)) {
-			$shellCommand = implode(' ', array_map(function($envKey) use ($env) {
-				return $envKey . '=' . escapeshellarg($env[$envKey]);
-			}, array_keys($env))) . ' ' . $shellCommand;
-		}
-
-		$args = array_filter(func_get_args());
-		foreach ($args AS $arg) {
-			if (is_string($arg)) {
-				$shellCommand .= ' ' . $arg;
-			} elseif(is_array($arg)) {
-				$shellCommand .= ' ' . implode(' ', $arg);
-			}
-		}
-
-		return $shellCommand;
-	}
+        return static::get($latestVersion, $availableVersions[$latestVersion]);
+    }
 
 
-	// static utility methods
-	public static function getAvailableVersions()
-	{
-		$results = [];
+    // magic methods and property getters
+    public function __construct($version, $path)
+    {
+        $this->version = $version;
+        $this->path = $path;
+    }
 
-		foreach (glob(static::$installRoot . '/*.*.*.*') AS $directory) {
-			$results[basename($directory)] = $directory;
-		}
+    public function __toString()
+    {
+        return $this->path;
+    }
 
-		uksort($results, 'version_compare');
+    public function getVersion()
+    {
+        return $this->version;
+    }
 
-		return $results;
-	}
+    public function getPath()
+    {
+        return $this->path;
+    }
+
+    // public instance methods
+    public function getExecutablePath()
+    {
+        return $this->getPath().'/sencha';
+    }
+
+    public function getDefaultEnv()
+    {
+        return [
+            'SENCHA_CMD_3_0_0' => $this->getPath()
+        ];
+    }
+
+    public function buildShellCommand()
+    {
+        $shellCommand = $this->getExecutablePath();
+
+        $env = $this->getDefaultEnv();
+
+        if (count($env)) {
+            $shellCommand = implode(' ', array_map(function($envKey) use ($env) {
+                return $envKey.'='.escapeshellarg($env[$envKey]);
+            }, array_keys($env))).' '.$shellCommand;
+        }
+
+        $args = array_filter(func_get_args());
+        foreach ($args AS $arg) {
+            if (is_string($arg)) {
+                $shellCommand .= ' '.$arg;
+            } elseif (is_array($arg)) {
+                $shellCommand .= ' '.implode(' ', $arg);
+            }
+        }
+
+        return $shellCommand;
+    }
+
+
+    // static utility methods
+    public static function getAvailableVersions()
+    {
+        $results = [];
+
+        foreach (glob(static::$installRoot.'/*.*.*.*') AS $directory) {
+            $results[basename($directory)] = $directory;
+        }
+
+        uksort($results, 'version_compare');
+
+        return $results;
+    }
 }

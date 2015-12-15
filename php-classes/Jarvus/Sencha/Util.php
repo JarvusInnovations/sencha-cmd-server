@@ -11,7 +11,7 @@ class Util
     public static function cleanJson($json)
     {
         $json = preg_replace('#(/\*([^*]|[\r\n]|(\*+([^*/]|[\r\n])))*\*+/)|([\s\t]//.*)|(^//.*)#', '', $json); // comment stripper from http://php.net/manual/en/function.json-decode.php#112735
-		$json = preg_replace('#([^\\\\])\\\\\\.#', '$1\\\\\\.', $json); // replace sencha-included "\." with "\\."
+        $json = preg_replace('#([^\\\\])\\\\\\.#', '$1\\\\\\.', $json); // replace sencha-included "\." with "\\."
 
         return $json;
     }
@@ -51,7 +51,7 @@ class Util
                     continue 2;
                 }
             }
-            
+
             fwrite($outputFile, $line);
         }
 

@@ -19,8 +19,8 @@ abstract class Package implements IPackage
     protected $classPaths;
 
     // factories
-	final public static function get($name, Framework $framework)
-	{
+    final public static function get($name, Framework $framework)
+    {
         foreach (static::$sources AS $source) {
             if (!is_a($source, IPackage::Class, true)) {
                 throw new \Exception('Source is not a package subclass');
@@ -32,30 +32,30 @@ abstract class Package implements IPackage
         }
 
         return null;
-	}
+    }
 
 
     // magic methods and property getters
-	public function __construct($name, $config)
-	{
-		$this->name = $name;
+    public function __construct($name, $config)
+    {
+        $this->name = $name;
         $this->config = $config;
-	}
+    }
 
     public function __toString()
-	{
-		return $this->name;
-	}
+    {
+        return $this->name;
+    }
 
-	public function getName()
-	{
-		return $this->name;
-	}
+    public function getName()
+    {
+        return $this->name;
+    }
 
-	public function getConfig($key = null)
-	{
-		return $key ? $this->config[$key] : $this->config;
-	}
+    public function getConfig($key = null)
+    {
+        return $key ? $this->config[$key] : $this->config;
+    }
 
 
     // member methods
@@ -95,7 +95,7 @@ abstract class Package implements IPackage
             $this->packageAntConfig = Util::loadAntProperties($antConfigPointer);
         }
 
-    	return $key ? $this->packageAntConfig[$key] : $this->packageAntConfig;
+        return $key ? $this->packageAntConfig[$key] : $this->packageAntConfig;
     }
 
     public function getRequiredPackageNames()
@@ -131,7 +131,7 @@ abstract class Package implements IPackage
         if (!$packageConfig || empty($packageConfig['name'])) {
             throw new \Exception("Could not parse package.json for $packagePath");
         }
-        
+
         return $packageConfig;
     }
 

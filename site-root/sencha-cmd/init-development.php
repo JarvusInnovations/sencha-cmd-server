@@ -28,35 +28,35 @@ $GLOBALS['Session']->requireAccountLevel('Developer');
     if (empty($_REQUEST['app'])) {
         die('Parameter app required');
     }
-    
+
     $app = Jarvus\Sencha\App::get($_REQUEST['app']);
-    
+
     if (!$app) {
         throw new \Exception('Failed to load app');
     }
-    
+
     Benchmark::mark("loaded app: $app");
-    
-    
+
+
     // get framework
     $framework = $app->getFramework();
-    
+
     if (!$framework) {
         throw new \Exception('Failed to load framework');
     }
-    
+
     Benchmark::mark("loaded framework: $framework");
-    
-    
+
+
     // load CMD
     $cmd = $app->getCmd();
-    
+
     if (!$cmd) {
         throw new \Exception('Failed to load CMD');
     }
-    
+
     Benchmark::mark("loaded cmd: $cmd");
-    
+
 
 
 /**
