@@ -248,6 +248,9 @@ $GLOBALS['Session']->requireAccountLevel('Developer');
             "-Dbuild.dir=$buildTmpPath",
             "-Dapp.output.base=$buildTmpPath", // CMD 5.0.1 needs this set directly too or it gets loaded from app.defaults.json
 
+            // optional closure path
+            class_exists('Jarvus\Closure\Compiler') && ($closureJarPath = Jarvus\Closure\Compiler::getJarPath()) ? "-Dbuild.compression.closure.jar=$closureJarPath" : null,
+
         // ant targets
         $buildType, // buildType target (e.g. "production", "testing") sets up build parameters
         'build'
