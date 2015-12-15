@@ -84,7 +84,7 @@ class Cmd
 			}, array_keys($env))) . ' ' . $shellCommand;
 		}
 
-		$args = func_get_args();
+		$args = array_filter(func_get_args());
 		foreach ($args AS $arg) {
 			if (is_string($arg)) {
 				$shellCommand .= ' ' . $arg;
