@@ -11,11 +11,11 @@ var fs = require('fs'),
     unzip = require('unzip'),
     semver = require('semver');
 
-var app = express(),
-    port = process.argv[2],
+var servicePath = '/emergence/services/sencha-cmd',
+    distPath = path.join(servicePath, 'dist'),
 
-    servicePath = '/emergence/services/sencha-cmd',
-    distPath = path.join(servicePath, 'dist');
+    app = express(),
+    port = process.argv[2];
 
 if (!port) {
     console.log('port required');
