@@ -1,0 +1,17 @@
+{
+  "name": "emergence-sencha-cmd",
+  "version": "0.0.1",
+  "description": "Provides a web-based job queue for Sencha CMD",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Chris Alfano <chris@jarv.us>",
+  "license": "MIT",
+  "dependencies": {
+    "async": "^2.0.0-rc.3",
+    "express": "^4.13.4",
+    "unzip": "^0.1.11",
+    "winston": "^2.2.0"
+  }
+}

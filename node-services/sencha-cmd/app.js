@@ -1,0 +1,161 @@
+#!/usr/bin/env node
+
+var fs = require('fs'),
+    path = require('path'),
+    http = require('http'),
+    exec = require('child_process').exec,
+
+    express = require('express'),
+    winston = require('winston'),
+    async = require('async'),
+    unzip = require('unzip');
+
+var app = express(),
+    port = process.argv[2],
+
+    servicePath = '/emergence/services/sencha-cmd',
+    distPath = path.join(servicePath, 'dist');
+
+if (!port) {
+    console.log('port required');
+    process.exit(1);
+}
+
+
+// register routes
+app.get('/builds', function(request, response) {
+    winston.info(request.method, req.url);
+    response.send('builds list');
+});
+
+app.post('/builds', function(request, response) {
+    winston.info(request.method, request.url);
+    response.send('create build');
+});
+
+
+// setup sencha cmd
+async.auto({
+    findCmd: function(callback, results) {
+        if (fs.existsSync(distPath)) {
+            fs.readdir(distPath, function(error, files) {
+                // TODO: pick newest version
+                callback(null, files.length);
+            });
+        } else {
+            if (!fs.existsSync(servicePath)) {
+                fs.mkdirSync(servicePath, '700');
+            }
+
+            fs.mkdirSync(distPath, '700');
+            callback(null, false);
+        }
+    },
+
+    installCmd: [
+        'findCmd',
+        function(results, callback) {
+            var cmdVersion = '6.1.2',
+                downloadUrl = 'http://cdn.sencha.com/cmd/' + cmdVersion + '/no-jre/SenchaCmd-' + cmdVersion + '-linux-amd64.sh.zip',
+                tmpPath = path.join('/tmp', path.basename(downloadUrl, '.zip'));
+
+            async.auto({
+                downloadInstaller: function(callback) {
+                    winston.info('downloading', downloadUrl);
+
+                    http.get(downloadUrl, function(response) {
+                        var unzipStream = unzip.Parse(),
+                            tmpFileStream = fs.createWriteStream(tmpPath);
+
+                        winston.info('receiving response');
+
+                        response.pipe(unzipStream);
+
+                        unzipStream.on('entry', function(entry) {
+                            if (entry.path.match(/\.sh$/)) {
+                                winston.info('extracting', entry.path);
+                                entry.pipe(tmpFileStream);
+                            } else {
+                                entry.autodrain();
+                            }
+                        });
+
+                        tmpFileStream.on('finish', function() {
+                            winston.info('finishing writing', tmpPath);
+
+                            tmpFileStream.close(function(error) {
+                                if (error) {
+                                    return callback(error);
+                                }
+
+                                fs.chmod(tmpPath, '700', function(error) {
+                                    if (error) {
+                                        return callback(error);
+                                    }
+
+                                    callback(null, tmpPath);
+                                });
+                            });
+                        });
+                    }).on('error', function(error) {
+                        fs.unlink(tmpPath);
+                        callback(error);
+                    });
+                },
+
+                executeInstaller: [
+                    'downloadInstaller',
+                    function(results, callback) {
+                        var installerPath = results.downloadInstaller,
+                            installPath = path.join(distPath, cmdVersion),
+                            installerCommand = [
+                                installerPath,
+                                '-q', // quiet
+                                '-a', // all components
+                                '-dir', installPath
+                            ].join(' ');
+
+                        winston.info('executing', installerCommand);
+
+                        exec(installerCommand, function(error, stdout, stderr) {
+                            if (error) {
+                                return callback('failed to install cmd');
+                            }
+
+                            winston.info('finished installation');
+                            callback(null, installPath);
+                        });
+                    }
+                ]
+            }, function(error, results) {
+                if (error) {
+                    return callback(error);
+                }
+
+                callback(null, results.executeInstaller);
+            });
+        }
+    ],
+
+    startServer: [
+        'installCmd',
+        function(results, callback) {
+            var cmdPath = results.executeInstaller;
+
+            winston.info('starting service for', cmdPath);
+
+            app.listen(port, function() {
+                callback(null, port);
+            });
+        }
+    ]
+}, function(error, result) {
+    if (error) {
+        winston.error('launch failed', error);
+        return;
+    }
+
+    winston.info('listening on', result.startServer);
+    winston.info(result);
+});
+
