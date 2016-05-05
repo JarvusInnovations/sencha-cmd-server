@@ -8,7 +8,8 @@ var fs = require('fs'),
     express = require('express'),
     winston = require('winston'),
     async = require('async'),
-    unzip = require('unzip');
+    unzip = require('unzip'),
+    semver = require('semver');
 
 var app = express(),
     port = process.argv[2],
@@ -39,8 +40,20 @@ async.auto({
     findCmd: function(callback, results) {
         if (fs.existsSync(distPath)) {
             fs.readdir(distPath, function(error, files) {
-                // TODO: pick newest version
-                callback(null, files.length);
+                if (error) {
+                    return callback(error);
+                }
+
+                files = files.filter(semver.valid);
+
+                if (!files.length) {
+                    return callback(null, false);
+                }
+
+                // sort newest first
+                files.sort(semver.rcompare);
+
+                callback(null, path.join(distPath, files[0]));
             });
         } else {
             if (!fs.existsSync(servicePath)) {
@@ -55,10 +68,17 @@ async.auto({
     installCmd: [
         'findCmd',
         function(results, callback) {
-            var cmdVersion = '6.1.2',
+            var existingCmd = results.findCmd,
+                cmdVersion = '6.1.2',
                 downloadUrl = 'http://cdn.sencha.com/cmd/' + cmdVersion + '/no-jre/SenchaCmd-' + cmdVersion + '-linux-amd64.sh.zip',
                 tmpPath = path.join('/tmp', path.basename(downloadUrl, '.zip'));
 
+            // return found cmd if it is adaquate
+            if (existingCmd) {
+                return callback(null, existingCmd);
+            }
+
+            // download and install cmd
             async.auto({
                 downloadInstaller: function(callback) {
                     winston.info('downloading', downloadUrl);
@@ -140,7 +160,7 @@ async.auto({
     startServer: [
         'installCmd',
         function(results, callback) {
-            var cmdPath = results.executeInstaller;
+            var cmdPath = results.installCmd;
 
             winston.info('starting service for', cmdPath);
 
