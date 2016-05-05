@@ -9,13 +9,15 @@ var fs = require('fs'),
     winston = require('winston'),
     async = require('async'),
     unzip = require('unzip'),
-    semver = require('semver');
+    semver = require('semver'),
+    uuid = require('node-uuid');
 
 var servicePath = '/emergence/services/sencha-cmd',
     distPath = path.join(servicePath, 'dist'),
 
     app = express(),
-    port = process.argv[2];
+    port = process.argv[2],
+    builds = {};
 
 if (!port) {
     console.log('port required');
@@ -25,13 +27,27 @@ if (!port) {
 
 // register routes
 app.get('/builds', function(request, response) {
-    winston.info(request.method, req.url);
-    response.send('builds list');
+    response.send(builds);
+});
+
+app.get('/builds/:buildId', function(request, response) {
+    var buildId = request.params.buildId;
+
+    if (!builds.hasOwnProperty(buildId)) {
+        response.status(404).send('build not found');
+        return;
+    }
+
+    response.send(builds[request.params.buildId]);
 });
 
 app.post('/builds', function(request, response) {
-    winston.info(request.method, request.url);
-    response.send('create build');
+    var buildId = uuid.v4();
+
+    winston.info('queued build', buildId);
+    builds[buildId] = { status: 'pending' };
+
+    response.send(buildId);
 });
 
 
