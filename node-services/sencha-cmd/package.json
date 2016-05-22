@@ -10,6 +10,7 @@
   "license": "MIT",
   "dependencies": {
     "async": "^2.0.0-rc.3",
+    "body-parser": "^1.15.0",
     "express": "^4.13.4",
     "node-uuid": "^1.4.7",
     "semver": "^5.1.0",

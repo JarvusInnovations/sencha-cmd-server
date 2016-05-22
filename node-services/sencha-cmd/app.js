@@ -10,7 +10,8 @@ var fs = require('fs'),
     async = require('async'),
     unzip = require('unzip'),
     semver = require('semver'),
-    uuid = require('node-uuid');
+    uuid = require('node-uuid'),
+    jsonParser = require('body-parser').json();
 
 var servicePath = '/emergence/services/sencha-cmd',
     distPath = path.join(servicePath, 'dist'),
@@ -41,11 +42,11 @@ app.get('/builds/:buildId', function(request, response) {
     response.send(builds[request.params.buildId]);
 });
 
-app.post('/builds', function(request, response) {
+app.post('/builds', jsonParser, function(request, response) {
     var buildId = uuid.v4();
 
     winston.info('queued build', buildId);
-    builds[buildId] = { status: 'pending' };
+    builds[buildId] = { status: 'pending', options: request.body };
 
     response.send(buildId);
 });
