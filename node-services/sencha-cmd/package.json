@@ -12,6 +12,7 @@
     "async": "^2.0.0-rc.3",
     "body-parser": "^1.15.0",
     "express": "^4.13.4",
+    "git-http-backend": "^1.0.0",
     "node-uuid": "^1.4.7",
     "semver": "^5.1.0",
     "unzip": "^0.1.11",

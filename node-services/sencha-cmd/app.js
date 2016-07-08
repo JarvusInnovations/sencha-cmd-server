@@ -4,6 +4,7 @@ var fs = require('fs'),
     path = require('path'),
     http = require('http'),
     exec = require('child_process').exec,
+    spawn = require('child_process').spawn,
 
     express = require('express'),
     winston = require('winston'),
@@ -11,10 +12,12 @@ var fs = require('fs'),
     unzip = require('unzip'),
     semver = require('semver'),
     uuid = require('node-uuid'),
-    jsonParser = require('body-parser').json();
+    jsonParser = require('body-parser').json(),
+    gitBackend = require('git-http-backend');
 
 var servicePath = '/emergence/services/sencha-cmd',
     distPath = path.join(servicePath, 'dist'),
+    buildsRepositoryPath = path.join(servicePath, 'builds.git'),
 
     app = express(),
     port = process.argv[2],
@@ -51,10 +54,26 @@ app.post('/builds', jsonParser, function(request, response) {
     response.send(buildId);
 });
 
+app.all('/.git/*', function(request, response) {
+    winston.info('routing request to git-http-backend:', request.url);
+
+    request.pipe(gitBackend(request.url, function(error, service) {
+        if (error) {
+            return response.end(error + "\n");
+        }
+
+        response.setHeader('Content-Type', service.type);
+
+        var ps = spawn(service.cmd, service.args.concat(buildsRepositoryPath));
+        ps.stdout.pipe(service.createStream()).pipe(ps.stdin);
+
+    })).pipe(response);
+});
+
 
 // setup sencha cmd
 async.auto({
-    findCmd: function(callback, results) {
+    findCmd: function(callback) {
         if (fs.existsSync(distPath)) {
             fs.readdir(distPath, function(error, files) {
                 if (error) {
@@ -174,8 +193,25 @@ async.auto({
         }
     ],
 
+    initBuildsRepository: function(callback) {
+        if (fs.existsSync(buildsRepositoryPath)) {
+            return callback(null, true);
+        }
+
+        exec('git init --bare "'+buildsRepositoryPath+'"', function(error, stdout, stderr) {
+            if (error) {
+                return callback(error);
+            }
+
+            winston.info('initialized builds repository at', buildsRepositoryPath);
+
+            callback(null, true);
+        });
+    },
+
     startServer: [
         'installCmd',
+        'initBuildsRepository',
         function(results, callback) {
             var cmdPath = results.installCmd;
 
