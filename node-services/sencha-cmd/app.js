@@ -1,32 +1,53 @@
 #!/usr/bin/env node
+"use strict";
 
 var fs = require('fs'),
     path = require('path'),
     http = require('http'),
+    os = require('os'),
     exec = require('child_process').exec,
+    execFile = require('child_process').execFile,
     spawn = require('child_process').spawn,
 
     express = require('express'),
-    winston = require('winston'),
+    winston = module.exports.logger = require('winston'),
     async = require('async'),
     unzip = require('unzip'),
     semver = require('semver'),
     uuid = require('node-uuid'),
     jsonParser = require('body-parser').json(),
-    gitBackend = require('git-http-backend');
+    gitBackend = require('git-http-backend'),
+    tmp = require('tmp'),
+    requestModule = require('request'),
+
+    Git = require('./lib/git');
 
 var servicePath = '/emergence/services/sencha-cmd',
     distPath = path.join(servicePath, 'dist'),
-    buildsRepositoryPath = path.join(servicePath, 'builds.git'),
+    buildsRepoPath = path.join(servicePath, 'builds.git'),
+
+    parallelWorkers = 4,
 
     app = express(),
     port = process.argv[2],
-    builds = {};
+    logRe = /^([a-f0-9]{40}) (.*)$/,
+    buildBranchRe = /^builds\/([a-f0-9]{40})$/,
+    refsRe = /^([a-f0-9]{40}) ([a-z]+)\t(.*)$/,
+    urlRe = /^https?:\/\//,
+    gitEnv = {},
+    builds = {},
+    buildsRepo,
+    cmdPath;
 
 if (!port) {
     console.log('port required');
     process.exit(1);
 }
+
+
+// setup git environment variables
+gitEnv.GIT_AUTHOR_NAME = gitEnv.GIT_COMMITTER_NAME = 'Sencha Cmd';
+gitEnv.GIT_AUTHOR_EMAIL = gitEnv.GIT_COMMITTER_EMAIL = 'sencha-cmd@'+os.hostname();
 
 
 // register routes
@@ -55,20 +76,382 @@ app.post('/builds', jsonParser, function(request, response) {
 });
 
 app.all('/.git/*', function(request, response) {
-    winston.info('routing request to git-http-backend:', request.url);
-
     request.pipe(gitBackend(request.url, function(error, service) {
         if (error) {
             return response.end(error + "\n");
         }
 
+        winston.info('handling', service.action, service.fields);
+
         response.setHeader('Content-Type', service.type);
 
-        var ps = spawn(service.cmd, service.args.concat(buildsRepositoryPath));
-        ps.stdout.pipe(service.createStream()).pipe(ps.stdin);
+        var ps = spawn(service.cmd, service.args.concat(buildsRepoPath));
 
+        ps.on('exit', function(code) {
+            var branch = service.fields.branch;
+
+            if (service.action == 'push' && branch) {
+                winston.info('finished pushing %s: %s -> %s', branch, service.fields.last, service.fields.head);
+
+                if (service.fields.ref == 'heads' && (branch = buildBranchRe.exec(branch))) {
+                    buildTree(branch[1]);
+                }
+            }
+        });
+
+        ps.stdout.pipe(service.createStream()).pipe(ps.stdin);
     })).pipe(response);
 });
+
+
+// setup sencha CMD queue
+var cmdQueue = async.queue(function(task, callback) {
+    winston.info('executing', cmdPath, task.args.join(' '));
+
+    execFile(
+        cmdPath,
+        task.args,
+        task,
+        function(error, stdout, stderr) {
+            if (error) {
+                return callback(error);
+            }
+
+            if (stderr) {
+                return callback(stderr);
+            }
+
+            callback(null, stdout);
+        }
+    );
+}, parallelWorkers);
+
+
+// routine for executing hooks
+function executeHooks(buildTreeHash, event, payload, callback) {
+    winston.info("Executing hook %s for tree %s:", event, buildTreeHash, payload);
+
+    var webhookBody = {
+            event: event,
+            buildTreeHash: buildTreeHash
+        },
+        payloadKey;
+
+    for (payloadKey in payload) {
+        if (payload.hasOwnProperty(payloadKey)) {
+            webhookBody[payloadKey] = payload[payloadKey];
+        }
+    }
+
+    buildsRepo.exec('for-each-ref', 'refs/hooks/builds/'+buildTreeHash, function(error, output) {
+        if (error) {
+            return callback(error);
+        }
+
+        output = output.split('\n');
+
+        var refs = [],
+            ref;
+
+        while ( ( ref = output.shift() ) && ( ref = refsRe.exec(ref) ) ) {
+            refs.push({
+                hash: ref[1],
+                type: ref[2],
+                ref: ref[3]
+            });
+        }
+
+        async.each(refs, function(ref, callback) {
+            buildsRepo.exec('cat-file', 'blob', ref.hash, function(error, output) {
+                if (error) {
+                    return callback(error);
+                }
+
+                var url;
+
+                output = output.split('\n');
+
+                if (output[0] == '#!webhook') {
+                    output.shift();
+
+                    while (output.length) {
+                        if (!(url = output.shift()) || !urlRe.test(url)) {
+                            continue;
+                        }
+
+                        requestModule.post({
+                            url: url,
+                            headers: {
+                                'X-SenchaCmd-Event': event,
+                                'X-SenchaCmd-Tree': buildTreeHash
+                            },
+                            json: webhookBody,
+                            callback: function(error, response, body) {
+                                if (error) {
+                                    return callback(error);
+                                }
+
+                                winston.info('got %s from %s:', response.statusCode, url, body);
+                                callback();
+                            }
+                        });
+                    }
+                } else {
+                    throw 'TODO: support executing shell scripts';
+                }
+            });
+        }, callback);
+    });
+}
+
+
+// routine for launching build
+function buildTree(buildTreeHash) {
+
+    var branch = 'builds/'+buildTreeHash,
+        hookPayload = {};
+
+    async.auto({
+        getCommits: function(callback) {
+            buildsRepo.exec('log', { pretty: 'oneline' }, branch, function(error, output) {
+                if (error) {
+                    return callback(error);
+                }
+
+                output = output.split('\n');
+
+                var commits = [],
+                    commit;
+
+                while ( ( commit = output.shift() ) && ( commit = logRe.exec(commit) ) ) {
+                    commits.push({
+                        hash: commit[1],
+                        message: commit[2]
+                    });
+                }
+
+                callback(null, commits);
+            });
+        },
+
+        getAppName: function(callback) {
+            buildsRepo.exec('cat-file', 'blob', buildTreeHash+':app.name', function(error, appName) {
+                if (error) {
+                    return callback(error);
+                }
+
+                hookPayload.appName = appName;
+
+                callback(null, appName);
+            });
+        },
+
+        getEnvironment: function(callback) {
+            var env = Object.create(gitEnv);
+
+            tmp.dir(function(error, tmpWorkTree) {
+                if (error) {
+                    return callback(error);
+                }
+
+                tmp.tmpName(function(error, tmpIndexFile) {
+                    if (error) {
+                        return callback(error);
+                    }
+
+                    env.GIT_INDEX_FILE = tmpIndexFile;
+                    env.GIT_WORK_TREE = tmpWorkTree;
+
+                    callback(null, env);
+                });
+            });
+        },
+
+        checkoutBuild: [
+            'getCommits',
+            'getEnvironment',
+            function(results, callback) {
+                var lastCommit = results.getCommits[0],
+                    env = results.getEnvironment;
+
+                if (!lastCommit.message.match(/^Generate /)) {
+                    return callback('Branch is not in Generate state');
+                }
+
+                buildsRepo.exec(
+                    { $env: env },
+                    'checkout',
+                    { force: true },
+                    branch,
+                    function(error, output) {
+                        if (error) {
+                            return callback(error);
+                        }
+
+                        hookPayload.buildTreePath = env.GIT_WORK_TREE;
+
+                        executeHooks(buildTreeHash, 'checkout-build-tree', hookPayload, function() {
+                            callback(null, env.GIT_WORK_TREE);
+                        });
+                    }
+                );
+            }
+        ],
+
+        createExecuteCommit: [
+            'checkoutBuild',
+            'getEnvironment',
+            'getCommits',
+            'getAppName',
+            function(results, callback) {
+                var generateCommitHash = results.getCommits[0].hash,
+                    env = results.getEnvironment,
+                    executeCommitHash;
+
+                executeCommitHash = buildsRepo.exec(
+                    { $env: env },
+                    'commit-tree',
+                    generateCommitHash+':',
+                    {
+                        p: generateCommitHash,
+                        m: 'Execute Sencha CMD to build app '+results.getAppName
+                    },
+                    function(error, executeCommitHash) {
+                        if (error) {
+                            return callback(error);
+                        }
+
+                        buildsRepo.exec('update-ref', 'refs/heads/'+branch, executeCommitHash, function(error, output) {
+                            hookPayload.executeCommitHash = executeCommitHash;
+
+                            executeHooks(buildTreeHash, 'commit-execute', hookPayload, function() {
+                                callback(error, executeCommitHash);
+                            });
+                        });
+                    }
+                );
+            }
+        ],
+
+        getCmdConfig: [
+            'checkoutBuild',
+            function(results, callback) {
+                var workTree = results.checkoutBuild;
+
+                callback(null, {
+                    cwd: path.join(workTree, 'app'),
+                    args: [
+                        'ant',
+                        '-Dapp.output.base='+path.join(workTree, 'build'),
+                        '-Dbuild.temp.dir='+path.join(workTree, 'temp'),
+                        '-Dapp.cache.deltas=false',
+                        'production',
+                        'build',
+                        '.props'
+                    ]
+                });
+            }
+        ],
+
+        executeCmd: [
+            'createExecuteCommit',
+            'getCmdConfig',
+            function(results, callback) {
+                cmdQueue.push(results.getCmdConfig, callback);
+            }
+        ],
+
+        commitBuild: [
+            'getCmdConfig',
+            'executeCmd',
+            function(results, callback) {
+
+                // add all files to index
+                buildsRepo.exec(
+                    { $env: results.getEnvironment },
+                    'add',
+                    'build', 'app',
+                    function(error, output) {
+                        if (error) {
+                            return callback(error);
+                        }
+
+                        // write tree
+                        buildsRepo.exec(
+                            { $env: results.getEnvironment },
+                            'write-tree',
+                            function(error, outputTreeHash) {
+                                if (error) {
+                                    return callback(error);
+                                }
+
+                                var commitMessage =
+                                    'Build app '+results.getAppName+' for production\n' +
+                                    '\n' +
+                                    'Executed command: `sencha '+results.getCmdConfig.args.join(' ')+'`\n' +
+                                    '\n' +
+                                    '    '+results.executeCmd.replace(/\n/g, '\n    ');
+
+                                buildsRepo.exec(
+                                    { $env: results.getEnvironment },
+                                    'commit-tree',
+                                    outputTreeHash,
+                                    {
+                                        p: results.createExecuteCommit,
+                                        m: commitMessage
+                                    },
+                                    function(error, outputCommitHash) {
+                                        if (error) {
+                                            return callback(error);
+                                        }
+
+                                        buildsRepo.exec('update-ref', 'refs/heads/'+branch, outputCommitHash, function(error, output) {
+                                            hookPayload.outputCommitHash = outputCommitHash;
+
+                                            executeHooks(buildTreeHash, 'commit-output', hookPayload, function() {
+                                                callback(error, outputCommitHash);
+                                            });
+                                        });
+                                    }
+                                );
+                            }
+                        )
+                    }
+                );
+            }
+        ]
+    }, function(error, results) {
+        var env = results.getEnvironment,
+            cleanupPaths = [];
+
+        if (env) {
+            if (env.GIT_WORK_TREE) {
+                cleanupPaths.push(env.GIT_WORK_TREE);
+            }
+
+            if (env.GIT_INDEX_FILE) {
+                cleanupPaths.push(env.GIT_INDEX_FILE);
+            }
+        }
+
+        if (cleanupPaths.length) {
+            exec('rm -R '+cleanupPaths.join(' '), function(error, stdout, stderr) {
+                if (error) {
+                    return winston.info('failed to clean up directories:', error);
+                }
+
+                winston.info('cleaned up directories:\n\t', cleanupPaths.join('\n\t'));
+            });
+        }
+
+        if (error) {
+            winston.error('build failed', error);
+            return;
+        }
+
+        winston.info('build', results.commitBuild, 'finished in', branch);
+    });
+}
 
 
 // setup sencha cmd
@@ -105,7 +488,7 @@ async.auto({
         'findCmd',
         function(results, callback) {
             var existingCmd = results.findCmd,
-                cmdVersion = '6.1.2',
+                cmdVersion = '6.1.3',
                 downloadUrl = 'http://cdn.sencha.com/cmd/' + cmdVersion + '/no-jre/SenchaCmd-' + cmdVersion + '-linux-amd64.sh.zip',
                 tmpPath = path.join('/tmp', path.basename(downloadUrl, '.zip'));
 
@@ -194,26 +577,34 @@ async.auto({
     ],
 
     initBuildsRepository: function(callback) {
-        if (fs.existsSync(buildsRepositoryPath)) {
+        if (fs.existsSync(buildsRepoPath)) {
             return callback(null, true);
         }
 
-        exec('git init --bare "'+buildsRepositoryPath+'"', function(error, stdout, stderr) {
+        exec('git init --bare "'+buildsRepoPath+'"', function(error, stdout, stderr) {
             if (error) {
                 return callback(error);
             }
 
-            winston.info('initialized builds repository at', buildsRepositoryPath);
+            winston.info('initialized builds repository at', buildsRepoPath);
 
             callback(null, true);
         });
     },
 
-    startServer: [
-        'installCmd',
+    openBuildsRepository: [
         'initBuildsRepository',
         function(results, callback) {
-            var cmdPath = results.installCmd;
+            buildsRepo = new Git(buildsRepoPath);
+            callback();
+        }
+    ],
+
+    startServer: [
+        'installCmd',
+        'openBuildsRepository',
+        function(results, callback) {
+            cmdPath = results.installCmd + '/sencha';
 
             winston.info('starting service for', cmdPath);
 
