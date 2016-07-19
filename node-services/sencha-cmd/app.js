@@ -19,6 +19,7 @@ var fs = require('fs'),
     gitBackend = require('git-http-backend'),
     tmp = require('tmp'),
     requestModule = require('request'),
+    mime = require('mime'),
 
     Git = require('./lib/git');
 
@@ -34,6 +35,7 @@ var servicePath = '/emergence/services/sencha-cmd',
     buildBranchRe = /^builds\/([a-f0-9]{40})$/,
     refsRe = /^([a-f0-9]{40}) ([a-z]+)\t(.*)$/,
     urlRe = /^https?:\/\//,
+    longTreeRe = /^(\d+) blob ([a-f0-9]{40}) +(\d+)\t(.*)$/,
     gitEnv = {},
     builds = {},
     buildsRepo,
@@ -345,6 +347,7 @@ function buildTree(buildTreeHash) {
                         '-Dapp.output.base='+path.join(workTree, 'build'),
                         '-Dbuild.temp.dir='+path.join(workTree, 'temp'),
                         '-Dapp.cache.deltas=false',
+                        '-Dapp.output.microloader.enable=false',
                         'production',
                         'build',
                         '.props'
@@ -361,12 +364,10 @@ function buildTree(buildTreeHash) {
             }
         ],
 
-        commitBuild: [
-            'getCmdConfig',
+        writeBuildTree: [
+            'getEnvironment',
             'executeCmd',
             function(results, callback) {
-
-                // add all files to index
                 buildsRepo.exec(
                     { $env: results.getEnvironment },
                     'add',
@@ -377,45 +378,115 @@ function buildTree(buildTreeHash) {
                         }
 
                         // write tree
-                        buildsRepo.exec(
-                            { $env: results.getEnvironment },
-                            'write-tree',
-                            function(error, outputTreeHash) {
-                                if (error) {
-                                    return callback(error);
-                                }
+                        buildsRepo.exec({ $env: results.getEnvironment }, 'write-tree', callback);
+                    }
+                );
+            }
+        ],
 
-                                var commitMessage =
-                                    'Build app '+results.getAppName+' for production\n' +
-                                    '\n' +
-                                    'Executed command: `sencha '+results.getCmdConfig.args.join(' ')+'`\n' +
-                                    '\n' +
-                                    '    '+results.executeCmd.replace(/\n/g, '\n    ');
+        writeManifest: [
+            'checkoutBuild',
+            'writeBuildTree',
+            function(results, callback) {
+                buildsRepo.exec('ls-tree', { r: true, l: true}, results.writeBuildTree+':build', function(error, treeOutput) {
+                    if (error) {
+                        return callback(error);
+                    }
 
-                                buildsRepo.exec(
-                                    { $env: results.getEnvironment },
-                                    'commit-tree',
-                                    outputTreeHash,
-                                    {
-                                        p: results.createExecuteCommit,
-                                        m: commitMessage
-                                    },
-                                    function(error, outputCommitHash) {
-                                        if (error) {
-                                            return callback(error);
-                                        }
+                    var manifestWriter = buildsRepo.exec('hash-object', { w: true, stdin: true, $spawn: true}),
+                        manifestHash = '';
 
-                                        buildsRepo.exec('update-ref', 'refs/heads/'+branch, outputCommitHash, function(error, output) {
-                                            hookPayload.outputCommitHash = outputCommitHash;
+                    manifestWriter.stdout.on('data', function(data) {
+                        manifestHash += data;
+                    });
 
-                                            executeHooks(buildTreeHash, 'commit-output', hookPayload, function() {
-                                                callback(error, outputCommitHash);
-                                            });
-                                        });
-                                    }
-                                );
+                    async.eachLimit(treeOutput.split('\n'), parallelWorkers, function(line, callback) {
+                        if ( !(line = longTreeRe.exec(line))) {
+                            return callback('unable to parse ls-tree output');
+                        }
+
+                        // get mime type
+                        // exec('file --brief --mime-type "'+path.join(results.checkoutBuild, 'build', line[4])+'"', function(error, stdout, stderr) {
+                            manifestWriter.stdin.write(
+                                line[4]+'\t'+ // path
+                                line[2]+'\t'+ // hash
+                                line[3]+'\t'+ // size
+                                mime.lookup(line[4])+'\n' // mime type
+                                // (stdout ? stdout.trim() : 'application/octet-stream')+'\n' // mime type
+                            );
+                            callback();
+                        // });
+                    }, function(error) {
+                        if (error) {
+                            return callback(error);
+                        }
+
+                        manifestWriter.on('close', function(exitCode) {
+                            if (exitCode) {
+                                return callback('hashing manifest failed with code '+exitCode);
                             }
-                        )
+
+                            callback(null, manifestHash.trim());
+                        });
+
+                        manifestWriter.stdin.end();
+                    });
+                });
+            }
+        ],
+
+        addManifestToBuildTree: [
+            'getEnvironment',
+            'writeManifest',
+            function(results, callback) {
+                var env = results.getEnvironment;
+
+                buildsRepo.exec({ $env: env }, 'update-index', { add: true, cacheinfo: true }, '100644', results.writeManifest, 'build.manifest', function(error, output) {
+                    if (error) {
+                        return callback(error);
+                    }
+
+                    // write new tree
+                    buildsRepo.exec({ $env: env }, 'write-tree', callback);
+                });
+            }
+        ],
+
+        commitBuild: [
+            'getEnvironment',
+            'getAppName',
+            'getCmdConfig',
+            'createExecuteCommit',
+            'executeCmd',
+            'addManifestToBuildTree',
+            function(results, callback) {
+                var commitMessage =
+                    'Build app '+results.getAppName+' for production\n' +
+                    '\n' +
+                    'Executed command: `sencha '+results.getCmdConfig.args.join(' ')+'`\n' +
+                    '\n' +
+                    '    '+results.executeCmd.replace(/\n/g, '\n    ');
+
+                buildsRepo.exec(
+                    { $env: results.getEnvironment },
+                    'commit-tree',
+                    results.addManifestToBuildTree,
+                    {
+                        p: results.createExecuteCommit,
+                        m: commitMessage
+                    },
+                    function(error, outputCommitHash) {
+                        if (error) {
+                            return callback(error);
+                        }
+
+                        buildsRepo.exec('update-ref', 'refs/heads/'+branch, outputCommitHash, function(error, output) {
+                            hookPayload.outputCommitHash = outputCommitHash;
+
+                            executeHooks(buildTreeHash, 'commit-output', hookPayload, function() {
+                                callback(error, outputCommitHash);
+                            });
+                        });
                     }
                 );
             }
