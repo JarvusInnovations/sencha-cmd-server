@@ -26,9 +26,8 @@ var Git = module.exports = function(options) {
 /**
  * Execute git command and return trimmed output
  */
-Git.prototype.exec = function(command, options, args) {
+Git.prototype.exec = function(command, options, args, done) {
     var execArgs = Array.prototype.slice.call(arguments),
-        done = execArgs.pop(),
         execOptions = {
             gitDir: this.gitDir,
             workTree: this.workTree
@@ -39,6 +38,10 @@ Git.prototype.exec = function(command, options, args) {
 
     // reset command, first arg might be an options object
     command = null;
+
+
+    // get callback function
+    done = typeof execArgs[execArgs.length - 1] == 'function' ? execArgs.pop() : null;
 
 
     // scan through all arguments
@@ -139,7 +142,9 @@ Git.prototype.exec = function(command, options, args) {
                 }
             }
 
-            done(error, stdout.trim());
+            if (done) {
+                done(error, stdout.trim());
+            }
         });
     } else {
         child_process.execFile('git', gitArgs, execOptions, function (error, stdout, stderr) {
@@ -151,7 +156,9 @@ Git.prototype.exec = function(command, options, args) {
                 }
             }
 
-            done(error, stdout.trim());
+            if (done) {
+                done(error, stdout.trim());
+            }
         });
     }
 };
