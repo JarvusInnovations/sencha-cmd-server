@@ -76,6 +76,16 @@ Git.prototype.exec = function(command, options, args, done) {
                     delete args.$nullOnError;
                 }
 
+                if ('$spawn' in args) {
+                    execOptions.spawn = args.$spawn;
+                    delete args.$spawn;
+                }
+
+                if ('$shell' in args) {
+                    execOptions.shell = args.$shell;
+                    delete args.$shell;
+                }
+
                 if ('$env' in args) {
                     for (let key in args.$env) {
                         gitEnv[key] = args.$env[key];
