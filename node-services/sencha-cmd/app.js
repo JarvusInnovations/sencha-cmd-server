@@ -77,32 +77,51 @@ app.post('/builds', jsonParser, function(request, response) {
     response.send(buildId);
 });
 
-app.all('/.git/*', function(request, response) {
+// setup git backend queue
+var gitBackendQueue = async.queue(function(task, callback) {
+    var request = task.request,
+        response = task.response;
+
+    winston.info('Passing request to git backend', request.url);
+
     request.pipe(gitBackend(request.url, function(error, service) {
         if (error) {
-            return response.end(error + "\n");
+            return response.end(error + '\n');
         }
 
-        winston.info('handling', service.action, service.fields);
+        var branch = service.fields.branch,
+            action = service.action;
+
+        winston.verbose('handling', action, service.fields);
 
         response.setHeader('Content-Type', service.type);
 
         var ps = spawn(service.cmd, service.args.concat(buildsRepoPath));
 
         ps.on('exit', function(code) {
-            var branch = service.fields.branch;
+            if (action != 'push' || !service.fields.refname) {
+                return callback();
+            }
 
-            if (service.action == 'push' && branch) {
-                winston.info('finished pushing %s: %s -> %s', branch, service.fields.last, service.fields.head);
+            winston.info('finished receiving %s: %s -> %s', service.fields.refname, service.fields.last, service.fields.head);
 
-                if (service.fields.ref == 'heads' && (branch = buildBranchRe.exec(branch))) {
-                    buildTree(branch[1]);
-                }
+            if (branch && (branch = buildBranchRe.exec(branch))) {
+                buildTree(branch[1], callback);
+            } else {
+                callback();
             }
         });
 
         ps.stdout.pipe(service.createStream()).pipe(ps.stdin);
     })).pipe(response);
+}, 1);
+
+app.all('/.git/*', function(request, response) {
+    console.log("Receiving git request", request.url);
+    gitBackendQueue.push({ request: request, response: response }, function() {
+        winston.info('Finished request', request.url);
+        response.end();
+    });
 });
 
 
@@ -115,12 +134,12 @@ var cmdQueue = async.queue(function(task, callback) {
         task.args,
         task,
         function(error, stdout, stderr) {
-            if (error) {
+             if (error) {
                 return callback(error);
             }
 
             if (stderr) {
-                return callback(stderr);
+                return callback({stderr: stderr, stdout: stdout});
             }
 
             callback(null, stdout);
@@ -208,7 +227,7 @@ function executeHooks(buildTreeHash, event, payload, callback) {
 
 
 // routine for launching build
-function buildTree(buildTreeHash) {
+function buildTree(buildTreeHash, buildDone) {
 
     var branch = 'builds/'+buildTreeHash,
         hookPayload = {};
@@ -324,10 +343,14 @@ function buildTree(buildTreeHash) {
                         }
 
                         buildsRepo.exec('update-ref', 'refs/heads/'+branch, executeCommitHash, function(error, output) {
+                            if (error) {
+                                return callback(error);
+                            }
+
                             hookPayload.executeCommitHash = executeCommitHash;
 
                             executeHooks(buildTreeHash, 'commit-execute', hookPayload, function() {
-                                callback(error, executeCommitHash);
+                                callback(null, executeCommitHash);
                             });
                         });
                     }
@@ -482,10 +505,14 @@ function buildTree(buildTreeHash) {
                         }
 
                         buildsRepo.exec('update-ref', 'refs/heads/'+branch, outputCommitHash, function(error, output) {
+                            if (error) {
+                                return callback(error);
+                            }
+
                             hookPayload.outputCommitHash = outputCommitHash;
 
                             executeHooks(buildTreeHash, 'commit-output', hookPayload, function() {
-                                callback(error, outputCommitHash);
+                                callback(null, outputCommitHash);
                             });
                         });
                     }
@@ -518,10 +545,11 @@ function buildTree(buildTreeHash) {
 
         if (error) {
             winston.error('build failed', error);
-            return;
+            return buildDone(error);
         }
 
         winston.info('build', results.commitBuild, 'finished in', branch);
+        buildDone();
     });
 }
 
