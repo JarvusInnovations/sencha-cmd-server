@@ -86,7 +86,8 @@ var gitBackendQueue = async.queue(function(task, callback) {
 
     request.pipe(gitBackend(request.url, function(error, service) {
         if (error) {
-            return response.end(error + '\n');
+            response.end(error + '\n');
+            return callback(error);
         }
 
         var branch = service.fields.branch,
@@ -114,13 +115,12 @@ var gitBackendQueue = async.queue(function(task, callback) {
 
         ps.stdout.pipe(service.createStream()).pipe(ps.stdin);
     })).pipe(response);
-}, 1);
+});
 
 app.all('/.git/*', function(request, response) {
     console.log("Receiving git request", request.url);
     gitBackendQueue.push({ request: request, response: response }, function() {
         winston.info('Finished request', request.url);
-        response.end();
     });
 });
 
@@ -182,7 +182,7 @@ function executeHooks(buildTreeHash, event, payload, callback) {
             });
         }
 
-        async.each(refs, function(ref, callback) {
+        async.eachSeries(refs, function(ref, callback) {
             buildsRepo.exec('cat-file', 'blob', ref.hash, function(error, output) {
                 if (error) {
                     return callback(error);
@@ -195,9 +195,9 @@ function executeHooks(buildTreeHash, event, payload, callback) {
                 if (output[0] == '#!webhook') {
                     output.shift();
 
-                    while (output.length) {
-                        if (!(url = output.shift()) || !urlRe.test(url)) {
-                            continue;
+                    async.eachSeries(output, function(url, callback) {
+                        if (!urlRe.test(url)) {
+                            return callback();
                         }
 
                         requestModule.post({
@@ -208,15 +208,11 @@ function executeHooks(buildTreeHash, event, payload, callback) {
                             },
                             json: webhookBody,
                             callback: function(error, response, body) {
-                                if (error) {
-                                    return callback(error);
-                                }
-
                                 winston.info('got %s from %s:', response.statusCode, url, body);
                                 callback();
                             }
                         });
-                    }
+                    }, callback);
                 } else {
                     throw 'TODO: support executing shell scripts';
                 }
