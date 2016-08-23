@@ -8,6 +8,7 @@ var fs = require('fs'),
     exec = require('child_process').exec,
     execFile = require('child_process').execFile,
     spawn = require('child_process').spawn,
+    zlib = require('zlib'),
 
     express = require('express'),
     winston = module.exports.logger = require('winston'),
@@ -80,11 +81,21 @@ app.post('/builds', jsonParser, function(request, response) {
 // setup git backend queue
 var gitBackendQueue = async.queue(function(task, callback) {
     var request = task.request,
-        response = task.response;
+        response = task.response,
+        requestEncoding = request.headers['content-encoding'],
+        requestStream;
 
     winston.info('Passing request to git backend', request.url);
 
-    request.pipe(gitBackend(request.url, function(error, service) {
+    if (requestEncoding == 'gzip') {
+        requestStream = request.pipe(zlib.createGunzip());
+    } else if (requestEncoding == 'deflate') {
+        requestStream = request.pipe(zlib.createInflate());
+    } else {
+        requestStream = request;
+    }
+
+    requestStream.pipe(gitBackend(request.url, function(error, service) {
         if (error) {
             response.end(error + '\n');
             return callback(error);
