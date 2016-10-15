@@ -21,7 +21,7 @@
 
 ### Later
 
-- [ ] Move sencha-cmd-server to its own repo
+- [X] Move sencha-cmd-server to its own repo
 - [ ] auto-generate and possibly auto-install read-only deploy key?
 - [ ] execute siesta tests
 - [ ] build docs
