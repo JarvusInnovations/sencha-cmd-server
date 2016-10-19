@@ -566,9 +566,16 @@ async.auto({
     findCmd: function(callback) {
         if (fs.existsSync(distPath)) {
             fs.readdir(distPath, function(error, files) {
+                var buildVersionRe = /^(\d+\.\d+\.\d+)(\.\d+)$/;
+
                 if (error) {
                     return callback(error);
                 }
+
+                // convert sencha build versions to standard semver
+                files = files.map(function(version) {
+                    return version.replace(buildVersionRe, '$1-build$2');
+                });
 
                 files = files.filter(semver.valid);
 
