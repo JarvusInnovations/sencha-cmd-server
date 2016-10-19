@@ -382,7 +382,8 @@ function buildTree(buildTreeHash, buildDone) {
                         'production',
                         'build',
                         '.props'
-                    ]
+                    ],
+                    maxBuffer: 1024 * 1024 // 1MB output buffer
                 });
             }
         ],
