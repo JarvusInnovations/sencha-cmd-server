@@ -574,19 +574,26 @@ async.auto({
 
                 // convert sencha build versions to standard semver
                 files = files.map(function(version) {
-                    return version.replace(buildVersionRe, '$1-build$2');
+                    return {
+                        path: version,
+                        version: version.replace(buildVersionRe, '$1-build$2')
+                    };
                 });
 
-                files = files.filter(semver.valid);
+                files = files.filter(function(file) {
+                    return semver.valid(file.version);
+                });
 
                 if (!files.length) {
                     return callback(null, false);
                 }
 
                 // sort newest first
-                files.sort(semver.rcompare);
+                files.sort(function(a, b) {
+                    return semver.rcompare(a.version, b.version);
+                });
 
-                callback(null, path.join(distPath, files[0]));
+                callback(null, path.join(distPath, files[0].path));
             });
         } else {
             if (!fs.existsSync(servicePath)) {
