@@ -602,7 +602,7 @@ async.auto({
         'findCmd',
         function(results, callback) {
             var existingCmd = results.findCmd,
-                cmdVersion = '6.1.3',
+                cmdVersion = '6.2.0',
                 downloadUrl = 'http://cdn.sencha.com/cmd/' + cmdVersion + '/no-jre/SenchaCmd-' + cmdVersion + '-linux-amd64.sh.zip',
                 tmpPath = path.join('/tmp', path.basename(downloadUrl, '.zip'));
 
