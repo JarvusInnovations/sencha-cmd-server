@@ -374,7 +374,6 @@ function buildTree(buildTreeHash, buildDone) {
                         '-Dbuild.temp.dir='+path.join(workTree, 'temp'),
                         '-Dapp.cache.deltas=false',
                         '-Dapp.output.microloader.enable=false',
-                        '-Dbuild.css.selector.limit=0', // TODO: remove this, it breaks IE9 but currently split CSS files don't get linked to with correct paths
                         'production',
                         'build',
                         '.props'
