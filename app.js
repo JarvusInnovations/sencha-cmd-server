@@ -145,12 +145,8 @@ var cmdQueue = async.queue(function(task, callback) {
         task.args,
         task,
         function(error, stdout, stderr) {
-             if (error) {
-                return callback(error);
-            }
-
-            if (stderr) {
-                return callback({stderr: stderr, stdout: stdout});
+            if (error || stderr) {
+                return callback({stderr: stderr, stdout: stdout, error: error});
             }
 
             callback(null, stdout);
