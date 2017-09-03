@@ -45,7 +45,7 @@ var servicePath = '/emergence/services/sencha-cmd',
     cmdPath;
 
 if (!port) {
-    console.log('port required');
+    winston.error('port required');
     process.exit(1);
 }
 
@@ -131,7 +131,7 @@ var gitBackendQueue = async.queue(function(task, callback) {
 });
 
 app.all('/.git/*', function(request, response) {
-    console.log("Receiving git request", request.url);
+    winston.info("Receiving git request", request.url);
     gitBackendQueue.push({ request: request, response: response }, function() {
         winston.info('Finished request', request.url);
     });
