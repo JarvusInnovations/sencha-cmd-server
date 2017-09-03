@@ -28,6 +28,8 @@ var servicePath = '/emergence/services/sencha-cmd',
     distPath = path.join(servicePath, 'dist'),
     buildsRepoPath = path.join(servicePath, 'builds.git'),
 
+    cmdVersion = '6.2.2',
+
     parallelWorkers = 4,
 
     app = express(),
@@ -589,6 +591,12 @@ async.auto({
                     return semver.rcompare(a.version, b.version);
                 });
 
+		// make sure installed version greater than or equal to configured
+                if (semver.lt(files[0].version, cmdVersion)) {
+                    winston.info('Installed version', files[0].version, 'is older than configured version', cmdVersion);
+                    return callback(null, false);
+                }
+
                 callback(null, path.join(distPath, files[0].path));
             });
         } else {
@@ -605,7 +613,6 @@ async.auto({
         'findCmd',
         function(results, callback) {
             var existingCmd = results.findCmd,
-                cmdVersion = '6.2.0',
                 downloadUrl = 'http://cdn.sencha.com/cmd/' + cmdVersion + '/no-jre/SenchaCmd-' + cmdVersion + '-linux-amd64.sh.zip',
                 tmpPath = path.join('/tmp', path.basename(downloadUrl, '.zip'));
 
