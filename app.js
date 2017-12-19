@@ -28,7 +28,7 @@ var servicePath = '/emergence/services/sencha-cmd',
     distPath = path.join(servicePath, 'dist'),
     buildsRepoPath = path.join(servicePath, 'builds.git'),
 
-    cmdVersion = '6.2.2',
+    cmdVersion = '6.5.2',
 
     parallelWorkers = 4,
 
